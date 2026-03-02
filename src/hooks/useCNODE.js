@@ -1,81 +1,86 @@
-import { useState, useEffect, useCallback } from 'react'
-import { ethers } from 'ethers'
-import { CONTRACTS } from '../config/contracts.js'
-import { CNODE_ABI } from '../abi/cnode.js'
-
-// Helper: detect if real OPNet wallet is available
-const hasOpnet = () =>
-  typeof window !== 'undefined' &&
-  window.opnet != null &&
-  typeof window.opnet.requestAccounts === 'function'
+import { useState, useEffect, useCallback } from "react"
+import { CONTRACTS } from "../config/contracts.js"
 
 export function useCNODE(connected, address) {
   const [balance, setBalance] = useState(null)
   const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState(null)
+  const [error, setError] = useState(null)
 
+  // ===== READ BALANCE =====
   useEffect(() => {
-    if (!connected || !address) { setBalance(null); return }
-    setLoading(true); setError(null)
+    if (!connected || !address) {
+      setBalance(null)
+      return
+    }
 
-    const load = async () => {
+    const loadBalance = async () => {
       try {
-        if (hasOpnet()) {
-          const provider = new ethers.BrowserProvider(window.opnet)
-          const contract = new ethers.Contract(CONTRACTS.CNODE, CNODE_ABI, provider)
-
-          // Try decimals, default to 8 if fails (OPNet standard)
-          let dec = 8
-          try { dec = Number(await contract.decimals()) } catch {}
-
-          const raw = await contract.balanceOf(address)
-          setBalance(parseFloat(ethers.formatUnits(raw, dec)))
-        } else {
-          // Demo mode
-          await new Promise(r => setTimeout(r, 900))
-          setBalance(142857.69)
+        if (!window.opnet || typeof window.opnet.call !== "function") {
+          throw new Error("OPWallet not available")
         }
+
+        setLoading(true)
+        setError(null)
+
+        const result = await window.opnet.call({
+          to: CONTRACTS.CNODE,
+          method: "balanceOf",
+          args: [address]
+        })
+
+        // OPNet returns bigint or string
+        const value = Number(result) / 1e8
+        setBalance(value)
+
       } catch (e) {
-        console.error('useCNODE error:', e)
+        console.error("Balance error:", e)
         setError(e.message)
         setBalance(0)
       } finally {
         setLoading(false)
       }
     }
-    load()
+
+    loadBalance()
   }, [connected, address])
 
-  // Approve CNODE for router
+  // ===== APPROVE CNODE =====
   const approveCNODE = useCallback(async (amount) => {
-    if (!hasOpnet()) {
-      await new Promise(r => setTimeout(r, 1200))
-      return true
+    if (!window.opnet || typeof window.opnet.sendTransaction !== "function") {
+      throw new Error("OPWallet not available")
     }
-    const provider = new ethers.BrowserProvider(window.opnet)
-    const signer   = await provider.getSigner()
-    const contract = new ethers.Contract(CONTRACTS.CNODE, CNODE_ABI, signer)
-    const parsed   = ethers.parseUnits(amount.toString(), 8)
-    const tx       = await contract.approve(CONTRACTS.ROUTER, parsed)
-    await tx.wait()
-    return true
+
+    return await window.opnet.sendTransaction({
+      to: CONTRACTS.CNODE,
+      method: "approve",
+      args: [
+        CONTRACTS.ROUTER,
+        BigInt(Math.floor(Number(amount) * 1e8))
+      ]
+    })
   }, [])
 
-  // Approve PILL for router
+  // ===== APPROVE PILL =====
   const approvePILL = useCallback(async (amount) => {
-    if (!hasOpnet()) {
-      await new Promise(r => setTimeout(r, 1200))
-      return true
+    if (!window.opnet || typeof window.opnet.sendTransaction !== "function") {
+      throw new Error("OPWallet not available")
     }
-    const provider = new ethers.BrowserProvider(window.opnet)
-    const signer   = await provider.getSigner()
-    const contract = new ethers.Contract(CONTRACTS.PILL, CNODE_ABI, signer)
-    const parsed   = ethers.parseUnits(amount.toString(), 8)
-    const tx       = await contract.approve(CONTRACTS.ROUTER, parsed)
-    await tx.wait()
-    return true
+
+    return await window.opnet.sendTransaction({
+      to: CONTRACTS.PILL,
+      method: "approve",
+      args: [
+        CONTRACTS.ROUTER,
+        BigInt(Math.floor(Number(amount) * 1e8))
+      ]
+    })
   }, [])
 
-  return { balance, loading, error, approveCNODE, approvePILL }
+  return {
+    balance,
+    loading,
+    error,
+    approveCNODE,
+    approvePILL
+  }
 }
-

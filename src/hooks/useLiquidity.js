@@ -12,27 +12,17 @@ export function useLiquidity(address) {
     if (!address) return
 
     try {
-      if (!window.opnet?.web3?.provider) {
-        throw new Error("OPWallet provider missing")
+      if (!window.opnet) {
+        throw new Error("Wallet missing")
       }
 
       setStatus("adding")
 
-      const provider = new ethers.BrowserProvider(
-        window.opnet.web3.provider
-      )
-
-      const signer = await provider.getSigner()
-
-      const router = new ethers.Contract(
-        CONTRACTS.ROUTER,
-        ROUTER_ABI,
-        signer
-      )
-
       const deadline = Math.floor(Date.now() / 1000) + 1200
 
-      const tx = await router.addLiquidity(
+      const iface = new ethers.Interface(ROUTER_ABI)
+
+      const data = iface.encodeFunctionData("addLiquidity", [
         CONTRACTS.CNODE,
         CONTRACTS.PILL,
         ethers.parseUnits(cnodeAmt.toString(), 8),
@@ -41,11 +31,17 @@ export function useLiquidity(address) {
         0n,
         address,
         deadline
-      )
+      ])
 
-      const receipt = await tx.wait()
+      const txHash = await window.opnet.request({
+        method: "sendTransaction",
+        params: [{
+          to: CONTRACTS.ROUTER,
+          data
+        }]
+      })
 
-      setTxHash(receipt.hash)
+      setTxHash(txHash)
       setStatus("success")
 
     } catch (e) {

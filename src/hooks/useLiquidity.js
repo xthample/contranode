@@ -1,47 +1,43 @@
-import { useState, useCallback } from "react"
-import { ethers } from "ethers"
+import { useCallback } from "react"
 import { CONTRACTS } from "../config/contracts"
 import { ROUTER_ABI } from "../abi/router"
+import { ethers } from "ethers"
 
 export function useLiquidity(address) {
-  const [status, setStatus] = useState("idle")
-  const [error, setError] = useState(null)
 
   const addLiquidity = useCallback(async (cnodeAmt, pillAmt) => {
-    if (!address) return
+    if (!address) throw new Error("Wallet not connected")
 
-    try {
-      const iface = new ethers.Interface(ROUTER_ABI)
+    const iface = new ethers.Interface(ROUTER_ABI)
 
-      const deadline = Math.floor(Date.now() / 1000) + 1200
+    const calldataHex = iface.encodeFunctionData("addLiquidity", [
+      CONTRACTS.CNODE,
+      CONTRACTS.PILL,
+      ethers.parseUnits(cnodeAmt.toString(), 8),
+      ethers.parseUnits(pillAmt.toString(), 8),
+      0n,
+      0n,
+      address,
+      Math.floor(Date.now()/1000) + 1200
+    ])
 
-      const data = iface.encodeFunctionData("addLiquidity", [
-        CONTRACTS.CNODE,
-        CONTRACTS.PILL,
-        ethers.parseUnits(cnodeAmt.toString(), 8),
-        ethers.parseUnits(pillAmt.toString(), 8),
-        0n,
-        0n,
-        address,
-        deadline
-      ])
+    const calldata = Uint8Array.from(
+      Buffer.from(calldataHex.replace("0x",""), "hex")
+    )
 
-      await window.opnet.request({
-        method: "sendTransaction",
-        params: [{
+    return await window.opnet._request({
+      method: "signAndBroadcastInteraction",
+      params: {
+        interactionParameters: {
           to: CONTRACTS.ROUTER,
-          data
-        }]
-      })
+          calldata,
+          gasSatFee: "0",
+          priorityFee: "0"
+        }
+      }
+    })
 
-      setStatus("success")
-
-    } catch (e) {
-      console.error(e)
-      setError(e.message)
-      setStatus("error")
-    }
   }, [address])
 
-  return { status, error, addLiquidity }
+  return { addLiquidity }
 }

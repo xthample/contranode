@@ -1,55 +1,34 @@
-import { useState, useCallback } from "react"
-import { ethers } from "ethers"
+import { useState, useEffect } from "react"
 import { CONTRACTS } from "../config/contracts"
-import { ROUTER_ABI } from "../abi/router"
 
-export function useLiquidity(address) {
-  const [status, setStatus] = useState("idle")
-  const [txHash, setTxHash] = useState(null)
+export function useCNODE(connected, address) {
+  const [balance, setBalance] = useState(null)
   const [error, setError] = useState(null)
 
-  const addLiquidity = useCallback(async (cnodeAmt, pillAmt) => {
-    if (!address) return
+  useEffect(() => {
+    if (!connected || !address) return
 
-    try {
-      if (!window.opnet) {
-        throw new Error("Wallet missing")
+    const load = async () => {
+      try {
+        const result = await window.opnet.request({
+          method: "call",
+          params: [{
+            to: CONTRACTS.CNODE,
+            method: "balanceOf",
+            args: [address]
+          }]
+        })
+
+        setBalance(Number(result) / 1e8)
+
+      } catch (e) {
+        console.error(e)
+        setError(e.message)
       }
-
-      setStatus("adding")
-
-      const deadline = Math.floor(Date.now() / 1000) + 1200
-
-      const iface = new ethers.Interface(ROUTER_ABI)
-
-      const data = iface.encodeFunctionData("addLiquidity", [
-        CONTRACTS.CNODE,
-        CONTRACTS.PILL,
-        ethers.parseUnits(cnodeAmt.toString(), 8),
-        ethers.parseUnits(pillAmt.toString(), 8),
-        0n,
-        0n,
-        address,
-        deadline
-      ])
-
-      const txHash = await window.opnet.request({
-        method: "sendTransaction",
-        params: [{
-          to: CONTRACTS.ROUTER,
-          data
-        }]
-      })
-
-      setTxHash(txHash)
-      setStatus("success")
-
-    } catch (e) {
-      console.error(e)
-      setError(e.message)
-      setStatus("error")
     }
-  }, [address])
 
-  return { status, txHash, error, addLiquidity }
+    load()
+  }, [connected, address])
+
+  return { balance, error }
 }

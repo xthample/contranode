@@ -1,34 +1,47 @@
-import { useState, useEffect } from "react"
+import { useState, useCallback } from "react"
+import { ethers } from "ethers"
 import { CONTRACTS } from "../config/contracts"
+import { ROUTER_ABI } from "../abi/router"
 
-export function useCNODE(connected, address) {
-  const [balance, setBalance] = useState(null)
+export function useLiquidity(address) {
+  const [status, setStatus] = useState("idle")
   const [error, setError] = useState(null)
 
-  useEffect(() => {
-    if (!connected || !address) return
+  const addLiquidity = useCallback(async (cnodeAmt, pillAmt) => {
+    if (!address) return
 
-    const load = async () => {
-      try {
-        const result = await window.opnet.request({
-          method: "call",
-          params: [{
-            to: CONTRACTS.CNODE,
-            method: "balanceOf",
-            args: [address]
-          }]
-        })
+    try {
+      const iface = new ethers.Interface(ROUTER_ABI)
 
-        setBalance(Number(result) / 1e8)
+      const deadline = Math.floor(Date.now() / 1000) + 1200
 
-      } catch (e) {
-        console.error(e)
-        setError(e.message)
-      }
+      const data = iface.encodeFunctionData("addLiquidity", [
+        CONTRACTS.CNODE,
+        CONTRACTS.PILL,
+        ethers.parseUnits(cnodeAmt.toString(), 8),
+        ethers.parseUnits(pillAmt.toString(), 8),
+        0n,
+        0n,
+        address,
+        deadline
+      ])
+
+      await window.opnet.request({
+        method: "sendTransaction",
+        params: [{
+          to: CONTRACTS.ROUTER,
+          data
+        }]
+      })
+
+      setStatus("success")
+
+    } catch (e) {
+      console.error(e)
+      setError(e.message)
+      setStatus("error")
     }
+  }, [address])
 
-    load()
-  }, [connected, address])
-
-  return { balance, error }
+  return { status, error, addLiquidity }
 }

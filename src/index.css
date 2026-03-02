@@ -1,0 +1,7 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Rajdhani:wght@600;700&display=swap');
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0B0B0D; overflow-x: hidden; }
+input::placeholder { color: #252535; font-family: 'Space Mono', monospace; font-size: 12px; }
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-thumb { background: #FF7A0040; border-radius: 2px; }
+
